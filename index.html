@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Couchmatch">
+<meta name="theme-color" content="#0f0d17">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Couchmatch</title>
+<style>
+  :root {
+    --bg: #f5f4f8;
+    --surface: #ffffff;
+    --surface-2: #ececf2;
+    --text: #14121c;
+    --secondary: #6e6a7c;
+    --sep: rgba(20, 18, 28, .08);
+    --accent: #6c4cf5;
+    --accent-2: #ff5a7a;
+    --nope: #ff4d5e;
+    --like: #19c37d;
+    --seen: #2f8cff;
+    --gold: #f5b70a;
+    --bar: rgba(255, 255, 255, .92);
+    --shadow: 0 12px 34px rgba(30, 20, 70, .22);
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f0d17; --surface: #1b1826; --surface-2: #262233; --text: #f4f2fa; --secondary: #9d98ad;
+      --sep: rgba(255, 255, 255, .08); --bar: rgba(18, 16, 27, .92); --shadow: 0 12px 34px rgba(0, 0, 0, .55);
+      color-scheme: dark;
+    }
+  }
+
+  /* App-Gefühl: nichts scrollt als ganze Seite, kein Zoom, kein Markieren */
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; }
+  body {
+    position: fixed; inset: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased; -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none; touch-action: manipulation;
+  }
+  input { -webkit-user-select: text; user-select: text; font: inherit; color: inherit; }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  img { -webkit-user-drag: none; }
+  [hidden] { display: none !important; }
+  .scroll { overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .scroll::-webkit-scrollbar { display: none; }
+
+  #app { position: absolute; inset: 0; display: flex; flex-direction: column; max-width: 560px; margin: 0 auto; }
+
+  /* Kopfzeile */
+  .topbar { flex: none; padding: calc(var(--safe-top) + 8px) 18px 6px; display: flex; align-items: center; justify-content: center; position: relative; }
+  .logo { display: flex; align-items: center; gap: 7px; font-weight: 800; font-size: 22px; letter-spacing: -.5px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .logo svg { width: 24px; height: 24px; }
+  .h-title { font-size: 32px; font-weight: 800; letter-spacing: -.6px; margin: 0; padding: calc(var(--safe-top) + 14px) 18px 6px; }
+
+  .view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+  /* Karten */
+  .deck { flex: 1; min-height: 0; position: relative; margin: 4px 12px 0; }
+  .card {
+    position: absolute; inset: 0; border-radius: 20px; overflow: hidden; background: #000;
+    box-shadow: var(--shadow); touch-action: none; will-change: transform;
+  }
+  .card.behind { transform: scale(.95) translateY(10px); pointer-events: none; }
+  .card.animate { transition: transform .32s cubic-bezier(.2,.9,.25,1), opacity .32s; }
+  .card img.poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .25s; }
+  .card img.poster.loaded { opacity: 1; }
+  .card .ph { position: absolute; inset: 0; background: linear-gradient(135deg, var(--accent), var(--accent-2)); display: grid; place-items: center; padding: 24px; color: #fff; font-weight: 800; font-size: 26px; text-align: center; }
+  .card .shade { position: absolute; left: 0; right: 0; bottom: 0; height: 52%; background: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,.55) 35%, rgba(0,0,0,.92) 100%); transition: height .25s; pointer-events: none; }
+  .card.open .shade { height: 82%; }
+  .badges { position: absolute; top: 14px; left: 14px; right: 14px; display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; }
+  .badge { background: rgba(0,0,0,.42); color: #fff; font-size: 12px; font-weight: 700; padding: 5px 9px; border-radius: 20px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+  .badge.kind { font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; }
+  .info { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 18px 18px; color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,.35); }
+  .info-head { display: flex; align-items: baseline; gap: 8px; }
+  .info-head h2 { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -.5px; line-height: 1.1; flex: 1; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .info-head .year { font-size: 19px; color: rgba(255,255,255,.8); flex: none; }
+  .info-head .more { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.2); align-self: center; }
+  .chips { display: flex; gap: 6px; margin: 9px 0 8px; overflow: hidden; white-space: nowrap; }
+  .chip { font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 20px; background: rgba(255,255,255,.18); color: #fff; flex: none; text-shadow: none; }
+  .chip.gold { color: var(--gold); }
+  .desc { margin: 0; font-size: 15px; line-height: 1.42; color: rgba(255,255,255,.9); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .card.open .desc { -webkit-line-clamp: 14; }
+  .stamp { position: absolute; top: 64px; padding: 2px 10px; border: 4px solid; border-radius: 10px; font-weight: 900; font-size: 30px; letter-spacing: 2px; opacity: 0; pointer-events: none; text-transform: uppercase; }
+  .stamp.like { left: 22px; color: var(--like); transform: rotate(-15deg); }
+  .stamp.nope { right: 22px; color: var(--nope); transform: rotate(15deg); }
+  .stamp.seen { left: 50%; top: 40%; transform: translateX(-50%) rotate(-6deg); color: var(--seen); white-space: nowrap; font-size: 26px; }
+
+  .actions { flex: none; display: flex; justify-content: center; align-items: center; gap: 16px; padding: 14px 0 12px; }
+  .act { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); box-shadow: 0 4px 14px rgba(30,20,70,.14); border: 1px solid var(--sep); transition: transform .12s; }
+  .act:active { transform: scale(.88); }
+  .act svg { width: 24px; height: 24px; }
+  .act.sm { width: 44px; height: 44px; }
+  .act.sm svg { width: 20px; height: 20px; }
+  .act.lg { width: 62px; height: 62px; }
+  .act.lg svg { width: 28px; height: 28px; }
+  .act:disabled { opacity: .35; }
+
+  .center-msg { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 32px; gap: 12px; color: var(--secondary); line-height: 1.45; }
+  .center-msg b { color: var(--text); font-size: 20px; }
+  .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--surface-2); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Tab-Leiste */
+  .tabbar { flex: none; display: flex; justify-content: space-around; padding: 8px 0 calc(var(--safe-bottom) + 6px); background: var(--bar); border-top: 1px solid var(--sep); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+  .tab { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; width: 80px; color: var(--secondary); opacity: .7; font-size: 10px; font-weight: 600; }
+  .tab svg { width: 26px; height: 26px; }
+  .tab.active { color: var(--accent); opacity: 1; }
+  .count { position: absolute; top: -4px; right: 18px; min-width: 17px; height: 17px; border-radius: 9px; background: var(--accent-2); color: #fff; font-size: 10px; font-weight: 700; display: grid; place-items: center; padding: 0 4px; }
+
+  /* Listen */
+  .list { flex: 1; min-height: 0; padding: 0 18px 18px; }
+  .sub { color: var(--secondary); font-size: 14px; margin: 0 0 12px; line-height: 1.45; }
+  .row { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--sep); }
+  .thumb { width: 56px; height: 84px; border-radius: 8px; flex: none; object-fit: cover; background: var(--surface-2); }
+  .row-body { flex: 1; min-width: 0; }
+  .row-body h3 { margin: 0 0 3px; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row-body p { margin: 0; font-size: 13px; color: var(--secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pill { flex: none; font-size: 12px; font-weight: 700; padding: 7px 11px; border-radius: 20px; background: var(--surface-2); }
+  .pill.blue { color: var(--seen); }
+  .x { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: var(--secondary); }
+
+  /* Auswahl */
+  .svc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .svc { position: relative; height: 58px; border-radius: 14px; display: flex; align-items: center; padding: 0 14px; font-weight: 800; font-size: 15px; color: #fff; transition: transform .12s, filter .2s; text-align: left; }
+  .svc:active { transform: scale(.97); }
+  .svc.off { filter: grayscale(1) opacity(.4); }
+  .svc .tick { position: absolute; top: 7px; right: 8px; width: 20px; height: 20px; border-radius: 50%; background: #fff; color: #111; display: grid; place-items: center; font-size: 12px; font-weight: 900; }
+  .svc.off .tick { display: none; }
+  .genres { display: flex; flex-wrap: wrap; gap: 8px; }
+  .genre { padding: 10px 15px; border-radius: 24px; background: var(--surface-2); font-weight: 600; font-size: 15px; }
+  .genre.on { color: #fff; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+  .label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--secondary); margin: 22px 0 10px; }
+  .primary { display: block; width: 100%; padding: 16px; border-radius: 30px; color: #fff; font-weight: 700; font-size: 16px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); text-align: center; }
+  .primary:disabled { opacity: .4; }
+  .ghost { display: block; width: 100%; padding: 13px; border-radius: 30px; font-weight: 700; font-size: 15px; color: var(--accent); text-align: center; }
+  .danger { color: var(--nope); }
+  .field { width: 100%; padding: 14px 16px; border-radius: 14px; border: 1.5px solid var(--sep); background: var(--surface); font-size: 16px; outline: none; }
+  .field:focus { border-color: var(--accent); }
+  .err { color: var(--nope); font-size: 14px; margin-top: 8px; min-height: 20px; }
+  .note { font-size: 12px; color: var(--secondary); line-height: 1.5; margin-top: 18px; }
+  .note a { color: var(--accent); }
+  .confirm { display: flex; gap: 8px; margin-top: 8px; }
+  .confirm button { flex: 1; padding: 12px; border-radius: 12px; font-weight: 700; }
+  .confirm .yes { background: var(--nope); color: #fff; }
+  .confirm .no { background: var(--surface-2); }
+
+  /* Einrichtung */
+  .ob { position: absolute; inset: 0; z-index: 30; background: var(--bg); display: flex; flex-direction: column; padding: calc(var(--safe-top) + 28px) 22px calc(var(--safe-bottom) + 18px); max-width: 560px; margin: 0 auto; }
+  .steps { display: flex; gap: 6px; margin-bottom: 24px; }
+  .steps span { flex: 1; height: 4px; border-radius: 2px; background: var(--surface-2); }
+  .steps span.on { background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+  .ob h2 { font-size: 30px; font-weight: 800; letter-spacing: -.6px; margin: 0 0 8px; line-height: 1.12; }
+  .ob p { color: var(--secondary); margin: 0 0 18px; font-size: 15px; line-height: 1.45; }
+  .ob-body { flex: 1; min-height: 0; }
+  .ob-foot { flex: none; display: grid; gap: 4px; padding-top: 14px; }
+
+  .toast { position: fixed; left: 50%; top: calc(var(--safe-top) + 58px); transform: translate(-50%, -10px); z-index: 40; background: var(--text); color: var(--bg); font-size: 13px; font-weight: 600; padding: 9px 14px; border-radius: 20px; opacity: 0; transition: .25s; pointer-events: none; white-space: nowrap; max-width: 90%; overflow: hidden; text-overflow: ellipsis; }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  @media (prefers-reduced-motion: reduce) { .card.animate { transition: none; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="view" id="view"></div>
+  <nav class="tabbar" id="tabbar">
+    <button class="tab active" data-tab="swipe"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="3" width="13" height="17" rx="3" opacity=".45" transform="rotate(-8 10 12)"/><rect x="7" y="4" width="13" height="17" rx="3"/></svg>Entdecken</button>
+    <button class="tab" data-tab="list"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-8-4.8-8-10.6A4.4 4.4 0 0 1 12 8a4.4 4.4 0 0 1 8 2.4C20 16.2 12 21 12 21z"/></svg>Merkliste<span class="count" id="count" hidden>0</span></button>
+    <button class="tab" data-tab="seen"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3L2.9 9.5l6.3-.9z"/></svg>Gesehen</button>
+    <button class="tab" data-tab="profile"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="4.2"/><path d="M3.8 20.5c.8-4 4.2-6.5 8.2-6.5s7.4 2.5 8.2 6.5z"/></svg>Profil</button>
+  </nav>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- Abos & Genres ----------
+  const SERVICES = [
+    { key: 'netflix', name: 'Netflix', color: '#d81f26', ids: [8], match: n => n.includes('netflix') },
+    { key: 'prime', name: 'Prime Video', color: '#1a98ff', ids: [9], match: n => n.includes('amazon prime video') },
+    { key: 'disney', name: 'Disney+', color: '#113ccf', ids: [337], match: n => n.includes('disney plus') || n.includes('disney+') },
+    { key: 'apple', name: 'Apple TV', color: '#2b2b2f', ids: [350], match: n => n.includes('apple tv') },
+    { key: 'wow', name: 'WOW', color: '#0b8f6a', ids: [30], match: n => n === 'wow' },
+    { key: 'paramount', name: 'Paramount+', color: '#0064ff', ids: [531], match: n => n.includes('paramount') },
+    { key: 'rtl', name: 'RTL+', color: '#e2001a', ids: [298], match: n => n.includes('rtl+') },
+    { key: 'joyn', name: 'Joyn', color: '#6b3ff0', ids: [304], match: n => n.includes('joyn') }
+  ];
+  const SVC = Object.fromEntries(SERVICES.map(s => [s.key, s]));
+  const GENRES = [
+    { name: 'Action', movie: [28, 12], tv: [10759] },
+    { name: 'Komödie', movie: [35], tv: [35] },
+    { name: 'Drama', movie: [18], tv: [18] },
+    { name: 'Thriller', movie: [53, 9648], tv: [9648] },
+    { name: 'Krimi', movie: [80], tv: [80] },
+    { name: 'Horror', movie: [27], tv: [] },
+    { name: 'Sci-Fi', movie: [878], tv: [10765] },
+    { name: 'Fantasy', movie: [14], tv: [10765] },
+    { name: 'Romantik', movie: [10749], tv: [10766] },
+    { name: 'Animation', movie: [16], tv: [16] },
+    { name: 'Doku', movie: [99], tv: [99] },
+    { name: 'Familie', movie: [10751], tv: [10751, 10762] }
+  ];
+  const genresOf = t => {
+    const out = [];
+    for (const id of t.genreIds) for (const g of GENRES) if ((t.tv ? g.tv : g.movie).includes(id) && !out.includes(g.name)) out.push(g.name);
+    return out;
+  };
+
+  // ---------- Gespeicherter Zustand (bleibt auf dem iPhone) ----------
+  const STORE_KEY = 'couchmatch:v1';
+  const defaults = () => ({ onboarded: false, apiKey: '', services: ['netflix', 'prime', 'disney'], genres: ['Action', 'Thriller', 'Sci-Fi'], decisions: {}, saved: {}, order: [], boost: {} });
+  let S = defaults();
+  try { const raw = localStorage.getItem(STORE_KEY); if (raw) S = Object.assign(defaults(), JSON.parse(raw)); } catch (e) { /* frischer Start */ }
+  const save = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) { /* Speicher voll oder gesperrt */ } };
+
+  // ---------- Laufzeit ----------
+  const R = { tab: 'swipe', pool: new Map(), deck: [], page: 1, exhausted: false, loading: false, error: '', providers: null, open: false, obStep: 0 };
+
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const view = document.getElementById('view');
+  const toastEl = document.getElementById('toast');
+  let toastT;
+  const toast = msg => { toastEl.textContent = msg; toastEl.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove('show'), 1700); };
+  const poster = (p, size) => p ? `https://image.tmdb.org/t/p/${size}${p}` : '';
+
+  // ---------- TMDB ----------
+  async function tmdb(path, params, key) {
+    const k = (key || S.apiKey).trim();
+    const url = new URL('https://api.themoviedb.org/3' + path);
+    const headers = { accept: 'application/json' };
+    if (k.startsWith('eyJ')) headers.Authorization = 'Bearer ' + k; else url.searchParams.set('api_key', k);
+    for (const [a, b] of Object.entries(params || {})) url.searchParams.set(a, b);
+    const r = await fetch(url, { headers });
+    if (!r.ok) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
+    return r.json();
+  }
+
+  async function resolveProviders() {
+    const found = {};
+    for (const kind of ['movie', 'tv']) {
+      const res = await tmdb(`/watch/providers/${kind}`, { watch_region: 'DE', language: 'de-DE' });
+      for (const p of res.results || []) {
+        const n = String(p.provider_name || '').toLowerCase();
+        for (const s of SERVICES) if (s.match(n)) (found[s.key] = found[s.key] || new Set()).add(p.provider_id);
+      }
+    }
+    const out = {};
+    for (const s of SERVICES) out[s.key] = Array.from(new Set([...(found[s.key] || []), ...s.ids]));
+    return out;
+  }
+
+  async function discover(tv, ids, page) {
+    const res = await tmdb(tv ? '/discover/tv' : '/discover/movie', {
+      language: 'de-DE', watch_region: 'DE', with_watch_providers: ids.join('|'),
+      with_watch_monetization_types: 'flatrate', sort_by: 'popularity.desc', include_adult: 'false',
+      'vote_count.gte': '20', page: String(page)
+    });
+    return (res.results || []).filter(i => i.poster_path && (i.title || i.name)).map(i => ({
+      id: (tv ? 'tv-' : 'movie-') + i.id, tv,
+      title: (tv ? i.name : i.title) || i.title || i.name,
+      overview: i.overview || '',
+      poster: i.poster_path,
+      year: String((tv ? i.first_air_date : i.release_date) || '').slice(0, 4),
+      genreIds: i.genre_ids || [], rating: i.vote_average || 0, popularity: i.popularity || 0,
+      services: []
+    }));
+  }
+
+  // ---------- Bewertung & Stapel ----------
+  function genreScore(t) {
+    let s = 0;
+    genresOf(t).forEach((g, i) => { const w = i === 0 ? 1.2 : 0.8; if (S.genres.includes(g)) s += 2 * w; s += (S.boost[g] || 0) * w; });
+    return s;
+  }
+  function score(t) {
+    let s = genreScore(t) + Math.log10(Math.max(t.popularity, 1)) * 0.6;
+    if (Number(t.year) >= new Date().getFullYear() - 1) s += 0.5;
+    return s;
+  }
+  const matchPct = t => Math.min(98, Math.max(55, Math.round(58 + genreScore(t) * 8)));
+
+  function rebuild() {
+    const current = R.deck[0];
+    let list = [...R.pool.values()].filter(t => !S.decisions[t.id] && t.services.some(k => S.services.includes(k)));
+    list.sort((a, b) => score(b) - score(a));
+    if (current) { const i = list.findIndex(t => t.id === current.id); if (i > 0) list.unshift(list.splice(i, 1)[0]); }
+    R.deck = list;
+    if (R.deck.length < 8 && !R.exhausted && !R.loading) loadMore();
+  }
+
+  async function loadMore() {
+    if (R.loading || R.exhausted) return;
+    R.loading = true; R.error = '';
+    if (R.tab === 'swipe' && !R.deck.length) render();
+    try {
+      if (!R.providers) R.providers = await resolveProviders();
+      const page = R.page;
+      let got = false;
+      for (const key of [...S.services].sort()) {
+        const ids = R.providers[key] || SVC[key].ids;
+        for (const tv of [false, true]) {
+          const items = await discover(tv, ids, page);
+          if (items.length) got = true;
+          for (const it of items) {
+            const ex = R.pool.get(it.id);
+            if (ex) { if (!ex.services.includes(key)) ex.services.push(key); }
+            else { it.services = [key]; R.pool.set(it.id, it); }
+          }
+        }
+      }
+      R.page += 1;
+      if (!got || R.page > 20) R.exhausted = true;
+      R.loading = false;
+      const before = R.deck.length;
+      rebuild();
+      if (R.tab === 'swipe' && (before === 0 || before < 2)) render();
+    } catch (e) {
+      R.loading = false;
+      R.error = e.status === 401 ? 'Der TMDB-Schlüssel wird nicht akzeptiert. Trag ihn im Profil neu ein.' : 'Konnte keine Titel laden. Prüf deine Internetverbindung.';
+      if (R.tab === 'swipe') render();
+    }
+  }
+
+  function resetFeed() { R.pool = new Map(); R.deck = []; R.page = 1; R.exhausted = false; loadMore(); }
+
+  function decide(t, kind) {
+    S.decisions[t.id] = kind;
+    S.saved[t.id] = t;
+    S.order = S.order.filter(id => id !== t.id).concat(t.id);
+    if (kind === 'seen') genresOf(t).forEach(g => S.boost[g] = (S.boost[g] || 0) + 1);
+    R.deck = R.deck.filter(x => x.id !== t.id);
+    save(); updateCount();
+    if (R.deck.length < 8 && !R.exhausted) loadMore();
+  }
+  function undo() {
+    const id = S.order[S.order.length - 1]; if (!id) return;
+    const t = S.saved[id]; if (!t) return;
+    if (S.decisions[id] === 'seen') genresOf(t).forEach(g => S.boost[g] = Math.max(0, (S.boost[g] || 0) - 1));
+    delete S.decisions[id]; S.order.pop();
+    R.pool.set(id, t);
+    R.deck = [t].concat(R.deck.filter(x => x.id !== id));
+    save(); updateCount(); R.open = false; render();
+  }
+  const listOf = kind => S.order.slice().reverse().filter(id => S.decisions[id] === kind).map(id => S.saved[id]).filter(Boolean);
+  function updateCount() { const n = listOf('like').length, c = document.getElementById('count'); c.textContent = n; c.hidden = n === 0; }
+
+  // ---------- Entdecken ----------
+  const ICON = {
+    undo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h11a5 5 0 0 1 0 10H9"/><path d="M8 5L4 9l4 4"/></svg>',
+    nope: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    seen: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3L2.9 9.5l6.3-.9z"/></svg>',
+    like: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-8-4.8-8-10.6A4.4 4.4 0 0 1 12 8a4.4 4.4 0 0 1 8 2.4C20 16.2 12 21 12 21z"/></svg>',
+    info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>',
+    x: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+  };
+
+  function cardHTML(t, behind) {
+    const chips = t.services.map(k => `<span class="chip" style="background:${SVC[k].color}">${SVC[k].name}</span>`).join('')
+      + (t.rating > 0 ? `<span class="chip gold">★ ${t.rating.toFixed(1)}</span>` : '')
+      + genresOf(t).slice(0, 2).map(g => `<span class="chip">${g}</span>`).join('');
+    return `<div class="card ${behind ? 'behind' : ''} ${!behind && R.open ? 'open' : ''}" data-id="${esc(t.id)}">
+      <div class="ph">${esc(t.title)}</div>
+      <img class="poster" alt="" src="${poster(t.poster, 'w780')}" onload="this.classList.add('loaded')">
+      <div class="shade"></div>
+      <div class="badges"><span class="badge kind">${t.tv ? 'Serie' : 'Film'}</span><span class="badge">${matchPct(t)} % Match</span></div>
+      <div class="stamp like">Merken</div><div class="stamp nope">Nö</div><div class="stamp seen">Gesehen ★</div>
+      <div class="info">
+        <div class="info-head"><h2>${esc(t.title)}</h2>${t.year ? `<span class="year">${t.year}</span>` : ''}<span class="more">${R.open && !behind ? '⌄' : 'i'}</span></div>
+        <div class="chips">${chips}</div>
+        <p class="desc">${esc(t.overview || 'Für diesen Titel gibt es noch keine deutsche Beschreibung.')}</p>
+      </div>
+    </div>`;
+  }
+
+  function renderSwipe() {
+    const header = `<div class="topbar"><div class="logo"><svg viewBox="0 0 24 24" fill="none"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6c4cf5"/><stop offset="1" stop-color="#ff5a7a"/></linearGradient></defs><rect x="2" y="5" width="20" height="13" rx="3.5" fill="url(#lg)"/><path d="M10 8.8v5.4l4.6-2.7z" fill="#fff"/></svg>couchmatch</div></div>`;
+    let body;
+    if (!R.deck.length) {
+      if (R.loading) body = `<div class="center-msg"><div class="spinner"></div>Suche Filme und Serien auf deinen Abos …</div>`;
+      else if (R.error) body = `<div class="center-msg"><b>Hoppla</b>${esc(R.error)}<button class="primary" style="max-width:260px" data-act="retry">Nochmal versuchen</button></div>`;
+      else body = `<div class="center-msg"><b>Alles durchgeswiped</b>Füg im Profil ein Abo hinzu oder setz deine Wischer zurück.<button class="primary" style="max-width:260px" data-act="retry">Mehr laden</button></div>`;
+    } else {
+      const top = R.deck[0], next = R.deck[1];
+      body = `<div class="deck" id="deck">${next ? cardHTML(next, true) : ''}${cardHTML(top, false)}</div>`;
+    }
+    const has = R.deck.length > 0;
+    view.innerHTML = header + body + `
+      <div class="actions">
+        <button class="act sm" data-act="undo" style="color:var(--gold)" aria-label="Rückgängig" ${S.order.length ? '' : 'disabled'}>${ICON.undo}</button>
+        <button class="act lg" data-act="nope" style="color:var(--nope)" aria-label="Nicht interessiert" ${has ? '' : 'disabled'}>${ICON.nope}</button>
+        <button class="act" data-act="seen" style="color:var(--seen)" aria-label="Schon gesehen und gut" ${has ? '' : 'disabled'}>${ICON.seen}</button>
+        <button class="act lg" data-act="like" style="color:var(--like)" aria-label="Merken" ${has ? '' : 'disabled'}>${ICON.like}</button>
+        <button class="act sm" data-act="info" style="color:var(--accent)" aria-label="Mehr Infos" ${has ? '' : 'disabled'}>${ICON.info}</button>
+      </div>`;
+    if (has) { attachDrag(); preload(); }
+  }
+
+  function preload() { R.deck.slice(2, 5).forEach(t => { const i = new Image(); i.src = poster(t.poster, 'w780'); }); }
+  const topCard = () => { const c = view.querySelectorAll('.card'); return c[c.length - 1]; };
+
+  function attachDrag() {
+    const card = topCard(); if (!card) return;
+    const st = { like: card.querySelector('.stamp.like'), nope: card.querySelector('.stamp.nope'), seen: card.querySelector('.stamp.seen') };
+    const behind = view.querySelector('.card.behind');
+    let sx = 0, sy = 0, dx = 0, dy = 0, active = false;
+    card.addEventListener('pointerdown', e => {
+      active = true; sx = e.clientX; sy = e.clientY; dx = dy = 0;
+      card.setPointerCapture(e.pointerId); card.classList.remove('animate');
+    });
+    card.addEventListener('pointermove', e => {
+      if (!active) return;
+      dx = e.clientX - sx; dy = e.clientY - sy;
+      card.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx / 18}deg)`;
+      st.like.style.opacity = Math.max(0, Math.min(1, dx / 90));
+      st.nope.style.opacity = Math.max(0, Math.min(1, -dx / 90));
+      st.seen.style.opacity = Math.max(0, Math.min(1, (-dy - Math.abs(dx) * .6) / 90));
+      if (behind) { const p = Math.min(1, Math.hypot(dx, dy) / 150); behind.style.transform = `scale(${.95 + .05 * p}) translateY(${10 - 10 * p}px)`; }
+    });
+    const end = () => {
+      if (!active) return; active = false;
+      if (dy < -110 && Math.abs(dy) > Math.abs(dx)) fly('seen');
+      else if (dx > 110) fly('like');
+      else if (dx < -110) fly('nope');
+      else if (Math.abs(dx) < 6 && Math.abs(dy) < 6) toggleOpen();
+      else {
+        card.classList.add('animate'); card.style.transform = '';
+        Object.values(st).forEach(s => s.style.opacity = 0);
+        if (behind) { behind.classList.add('animate'); behind.style.transform = ''; }
+      }
+    };
+    card.addEventListener('pointerup', end);
+    card.addEventListener('pointercancel', end);
+  }
+
+  function toggleOpen() {
+    R.open = !R.open;
+    const c = topCard(); if (!c) return;
+    c.classList.toggle('open', R.open);
+    const m = c.querySelector('.more'); if (m) m.textContent = R.open ? '⌄' : 'i';
+  }
+
+  let flying = false;
+  function fly(kind) {
+    const card = topCard(); const t = R.deck[0];
+    if (!card || !t || flying) return;
+    flying = true;
+    const s = card.querySelector('.stamp.' + kind); if (s) s.style.opacity = 1;
+    card.classList.add('animate');
+    const tx = kind === 'like' ? 600 : kind === 'nope' ? -600 : 0;
+    card.style.transform = `translate(${tx}px, ${kind === 'seen' ? -1000 : 40}px) rotate(${tx / 20}deg)`;
+    card.style.opacity = '0';
+    const behind = view.querySelector('.card.behind');
+    if (behind) { behind.classList.add('animate'); behind.style.transform = 'scale(1) translateY(0)'; }
+    setTimeout(() => {
+      decide(t, kind);
+      toast(kind === 'like' ? `„${t.title}“ gemerkt` : kind === 'seen' ? 'Notiert, ähnliche Titel kommen öfter' : 'Weg damit');
+      R.open = false; flying = false;
+      if (R.tab === 'swipe') renderSwipe();
+    }, 280);
+  }
+
+  // ---------- Listen ----------
+  function rowHTML(t, actions) {
+    const svc = t.services.map(k => SVC[k] ? SVC[k].name : '').filter(Boolean).join(', ');
+    return `<div class="row">
+      <img class="thumb" alt="" src="${poster(t.poster, 'w185')}">
+      <div class="row-body"><h3>${esc(t.title)}</h3><p>${esc([svc, t.tv ? 'Serie' : 'Film', t.year].filter(Boolean).join(' · '))}</p></div>
+      ${actions}
+    </div>`;
+  }
+  function renderList() {
+    const items = listOf('like');
+    view.innerHTML = `<h1 class="h-title">Merkliste</h1><div class="list scroll">
+      <p class="sub">Alles, was du nach rechts gewischt hast. Geschaut? Tipp auf „Gesehen“.</p>
+      ${items.length ? items.map(t => rowHTML(t, `<button class="pill blue" data-seen="${esc(t.id)}">Gesehen</button><button class="x" data-remove="${esc(t.id)}" aria-label="Entfernen">${ICON.x}</button>`)).join('')
+        : '<div class="center-msg"><b>Noch leer</b>Wisch bei „Entdecken“ nach rechts, um dir etwas zu merken.</div>'}
+    </div>`;
+  }
+  function renderSeen() {
+    const items = listOf('seen');
+    const fav = Object.entries(S.boost).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([g]) => g);
+    view.innerHTML = `<h1 class="h-title">Gesehen</h1><div class="list scroll">
+      <p class="sub">${fav.length ? 'Du magst gerade besonders <b>' + esc(fav.join(', ')) + '</b>. Davon zeigt dir Couchmatch jetzt mehr.' : 'Wisch nach oben bei Titeln, die du kennst und mochtest. So werden die Vorschläge besser.'}</p>
+      ${items.length ? items.map(t => rowHTML(t, `<span style="color:var(--gold);font-size:18px">★</span><button class="x" data-remove="${esc(t.id)}" aria-label="Entfernen">${ICON.x}</button>`)).join('')
+        : '<div class="center-msg"><b>Noch nichts</b>Wisch bei „Entdecken“ nach oben.</div>'}
+    </div>`;
+  }
+  const svcGrid = attr => `<div class="svc-grid">${SERVICES.map(s => `<button class="svc ${S.services.includes(s.key) ? '' : 'off'}" ${attr}="${s.key}" style="background:${s.color}" aria-pressed="${S.services.includes(s.key)}">${s.name}<span class="tick">✓</span></button>`).join('')}</div>`;
+  const genreWrap = attr => `<div class="genres">${GENRES.map(g => `<button class="genre ${S.genres.includes(g.name) ? 'on' : ''}" ${attr}="${g.name}" aria-pressed="${S.genres.includes(g.name)}">${g.name}</button>`).join('')}</div>`;
+
+  function renderProfile() {
+    view.innerHTML = `<h1 class="h-title">Profil</h1><div class="list scroll">
+      <p class="sub">Änderungen wirken sofort auf deine Vorschläge.</p>
+      <div class="label">Meine Abos</div>${svcGrid('data-psvc')}
+      <div class="label">Lieblingsgenres</div>${genreWrap('data-pgenre')}
+      <div class="label">TMDB-Schlüssel</div>
+      <button class="ghost" style="text-align:left;padding-left:0" data-act="key">Schlüssel ändern</button>
+      <div class="label">Daten</div>
+      <div id="resetBox"><button class="ghost danger" style="text-align:left;padding-left:0" data-act="reset">Alle Wischer zurücksetzen</button></div>
+      <p class="note">Filmdaten und Cover stammen von <a href="https://www.themoviedb.org" target="_blank" rel="noopener">TMDB</a>, die Verfügbarkeit bei den Streamingdiensten von JustWatch. This product uses the TMDB API but is not endorsed or certified by TMDB.<br>Deine Merkliste ist nur auf diesem iPhone gespeichert.</p>
+    </div>`;
+  }
+
+  function render() {
+    if (R.tab === 'swipe') renderSwipe();
+    else if (R.tab === 'list') renderList();
+    else if (R.tab === 'seen') renderSeen();
+    else renderProfile();
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === R.tab));
+  }
+
+  // ---------- Einrichtung ----------
+  function renderOnboarding() {
+    let ob = document.getElementById('ob');
+    if (!ob) { ob = document.createElement('div'); ob.id = 'ob'; ob.className = 'ob'; document.body.appendChild(ob); }
+    const steps = [0, 1, 2].map(i => `<span class="${i <= R.obStep ? 'on' : ''}"></span>`).join('');
+    if (R.obStep === 0) {
+      ob.innerHTML = `<div class="steps">${steps}</div>
+        <h2>Dein TMDB-Schlüssel</h2>
+        <p>Couchmatch holt Filme, Serien und Cover von TMDB. Füg hier einmal deinen API-Schlüssel ein. Er bleibt nur auf diesem iPhone.</p>
+        <div class="ob-body"><input class="field" id="keyInput" placeholder="API-Schlüssel einfügen" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(S.apiKey)}"><div class="err" id="keyErr"></div></div>
+        <div class="ob-foot"><button class="primary" data-ob="key">Weiter</button></div>`;
+    } else if (R.obStep === 1) {
+      ob.innerHTML = `<div class="steps">${steps}</div>
+        <h2>Welche Abos hast du?</h2>
+        <p>Du siehst nur Filme und Serien, die du auch wirklich schauen kannst.</p>
+        <div class="ob-body scroll">${svcGrid('data-osvc')}</div>
+        <div class="ob-foot"><button class="primary" data-ob="next">Weiter</button><button class="ghost" data-ob="back">Zurück</button></div>`;
+    } else {
+      ob.innerHTML = `<div class="steps">${steps}</div>
+        <h2>Was schaust du gern?</h2>
+        <p>Wähl ein paar Genres. Was du später nach oben wischst, zählt zusätzlich.</p>
+        <div class="ob-body scroll">${genreWrap('data-ogenre')}</div>
+        <div class="ob-foot"><button class="primary" data-ob="done" ${S.genres.length ? '' : 'disabled'}>Los geht’s</button><button class="ghost" data-ob="back">Zurück</button></div>`;
+    }
+  }
+
+  async function checkKey(key) {
+    try { await tmdb('/genre/movie/list', { language: 'de-DE' }, key); return ''; }
+    catch (e) { return e.status === 401 ? 'Dieser Schlüssel wird von TMDB nicht akzeptiert.' : 'Keine Verbindung zu TMDB. Prüf dein Internet.'; }
+  }
+
+  document.body.addEventListener('click', async e => {
+    const ob = e.target.closest('#ob');
+    if (!ob) return;
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.osvc) { toggleSvc(b.dataset.osvc); renderOnboarding(); return; }
+    if (b.dataset.ogenre) { toggleGenre(b.dataset.ogenre); renderOnboarding(); return; }
+    const a = b.dataset.ob;
+    if (a === 'key') {
+      const val = document.getElementById('keyInput').value.trim();
+      const err = document.getElementById('keyErr');
+      if (!val) { err.textContent = 'Bitte füg deinen Schlüssel ein.'; return; }
+      b.disabled = true; b.textContent = 'Prüfe …';
+      const msg = await checkKey(val);
+      if (msg) { err.textContent = msg; b.disabled = false; b.textContent = 'Weiter'; return; }
+      S.apiKey = val; save(); R.providers = null;
+      if (S.onboarded) { ob.remove(); toast('Schlüssel gespeichert'); resetFeed(); render(); return; }
+      R.obStep = 1; renderOnboarding();
+    } else if (a === 'back') { R.obStep -= 1; renderOnboarding(); }
+    else if (a === 'next') { R.obStep = 2; renderOnboarding(); }
+    else if (a === 'done') { S.onboarded = true; save(); ob.remove(); resetFeed(); render(); }
+  });
+
+  function toggleSvc(k) {
+    if (S.services.includes(k)) { if (S.services.length === 1) { toast('Mindestens ein Abo auswählen'); return; } S.services = S.services.filter(x => x !== k); }
+    else S.services = S.services.concat(k);
+    save();
+  }
+  function toggleGenre(g) {
+    S.genres = S.genres.includes(g) ? S.genres.filter(x => x !== g) : S.genres.concat(g);
+    save();
+  }
+
+  // ---------- Bedienung ----------
+  view.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const a = b.dataset.act;
+    if (a === 'nope' || a === 'like' || a === 'seen') fly(a);
+    else if (a === 'undo') undo();
+    else if (a === 'info') toggleOpen();
+    else if (a === 'retry') { if (!R.deck.length && R.exhausted) resetFeed(); else { R.exhausted = false; loadMore(); } }
+    else if (a === 'key') { R.obStep = 0; renderOnboarding(); }
+    else if (a === 'reset') {
+      document.getElementById('resetBox').innerHTML = '<div class="sub" style="margin:0">Merkliste und Gesehen werden geleert und alle Titel tauchen wieder auf.</div><div class="confirm"><button class="no" data-act="resetNo">Abbrechen</button><button class="yes" data-act="resetYes">Zurücksetzen</button></div>';
+    }
+    else if (a === 'resetNo') renderProfile();
+    else if (a === 'resetYes') { S.decisions = {}; S.saved = {}; S.order = []; S.boost = {}; save(); updateCount(); resetFeed(); toast('Zurückgesetzt'); renderProfile(); }
+    else if (b.dataset.seen) {
+      const t = S.saved[b.dataset.seen];
+      if (t) { S.decisions[t.id] = 'seen'; S.order = S.order.filter(id => id !== t.id).concat(t.id); genresOf(t).forEach(g => S.boost[g] = (S.boost[g] || 0) + 1); save(); updateCount(); toast('Zu „Gesehen“ verschoben'); render(); }
+    }
+    else if (b.dataset.remove) {
+      const id = b.dataset.remove;
+      delete S.decisions[id]; delete S.saved[id]; S.order = S.order.filter(x => x !== id);
+      save(); updateCount(); render();
+    }
+    else if (b.dataset.psvc) { toggleSvc(b.dataset.psvc); resetFeed(); renderProfile(); }
+    else if (b.dataset.pgenre) { toggleGenre(b.dataset.pgenre); rebuild(); renderProfile(); }
+  });
+
+  document.getElementById('tabbar').addEventListener('click', e => {
+    const t = e.target.closest('[data-tab]'); if (!t) return;
+    R.tab = t.dataset.tab; R.open = false; render();
+  });
+
+  // Doppeltipp-Zoom und Gesten-Zoom in Safari verhindern
+  document.addEventListener('gesturestart', e => e.preventDefault());
+  let lastTouch = 0;
+  document.addEventListener('touchend', e => { const now = Date.now(); if (now - lastTouch < 300 && !e.target.closest('input')) e.preventDefault(); lastTouch = now; }, { passive: false });
+
+  // ---------- Start ----------
+  updateCount();
+  render();
+  if (!S.onboarded || !S.apiKey) { R.obStep = S.apiKey ? 1 : 0; renderOnboarding(); }
+  else loadMore();
+})();
+</script>
+</body>
+</html>
